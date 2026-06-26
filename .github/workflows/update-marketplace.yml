@@ -3,17 +3,6 @@ name: Update Marketplace
 on:
   repository_dispatch:
     types: [plugin-release]
-  workflow_dispatch:
-    inputs:
-      plugin:
-        description: Plugin name (e.g. togi)
-        required: true
-      tag:
-        description: Git tag (e.g. v0.3.0)
-        required: true
-      sha:
-        description: Full commit SHA the tag points to
-        required: true
 
 jobs:
   update-marketplace:
@@ -21,43 +10,25 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Resolve inputs
-        id: inputs
-        run: |
-          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            PLUGIN="${{ github.event.client_payload.plugin }}"
-            TAG="${{ github.event.client_payload.tag }}"
-            SHA="${{ github.event.client_payload.sha }}"
-          else
-            PLUGIN="${{ github.event.inputs.plugin }}"
-            TAG="${{ github.event.inputs.tag }}"
-            SHA="${{ github.event.inputs.sha }}"
-          fi
-          {
-            echo "plugin=$PLUGIN"
-            echo "tag=$TAG"
-            echo "sha=$SHA"
-          } >> "$GITHUB_OUTPUT"
-
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Update marketplace.json
         env:
-          PLUGIN: ${{ steps.inputs.outputs.plugin }}
-          TAG: ${{ steps.inputs.outputs.tag }}
-          SHA: ${{ steps.inputs.outputs.sha }}
+          PLUGIN: ${{ github.event.client_payload.plugin }}
+          SHA: ${{ github.event.client_payload.sha }}
+          TAG: ${{ github.event.client_payload.tag }}
         run: |
           jq --arg p "$PLUGIN" --arg v "${TAG#v}" --arg r "$TAG" --arg s "$SHA" \
             '(.plugins[] | select(.name == $p)) |= (.version = $v | .source.ref = $r | .source.sha = $s)' \
             .claude-plugin/marketplace.json > /tmp/marketplace.json
           mv /tmp/marketplace.json .claude-plugin/marketplace.json
 
-      - name: Commit and push
+      - name: Commit
         env:
-          PLUGIN: ${{ steps.inputs.outputs.plugin }}
-          TAG: ${{ steps.inputs.outputs.tag }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PLUGIN: ${{ github.event.client_payload.plugin }}
+          TAG: ${{ github.event.client_payload.tag }}
         run: |
           FILE_SHA=$(gh api "repos/$GH_REPO/contents/.claude-plugin/marketplace.json" --jq '.sha')
           gh api "repos/$GH_REPO/contents/.claude-plugin/marketplace.json" \
