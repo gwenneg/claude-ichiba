@@ -9,6 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -23,16 +24,28 @@ jobs:
             .claude-plugin/marketplace.json > /tmp/marketplace.json
           mv /tmp/marketplace.json .claude-plugin/marketplace.json
 
-      - name: Commit
+      - name: Create branch and PR
         env:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PLUGIN: ${{ github.event.client_payload.plugin }}
           TAG: ${{ github.event.client_payload.tag }}
         run: |
-          FILE_SHA=$(gh api "repos/$GH_REPO/contents/.claude-plugin/marketplace.json" --jq '.sha')
+          BRANCH="release/$PLUGIN-$TAG"
+          MAIN_SHA=$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq '.object.sha')
+          gh api "repos/$GH_REPO/git/refs" \
+            --method POST \
+            -f "ref=refs/heads/$BRANCH" \
+            -f "sha=$MAIN_SHA"
+          FILE_SHA=$(gh api "repos/$GH_REPO/contents/.claude-plugin/marketplace.json?ref=$BRANCH" --jq '.sha')
           gh api "repos/$GH_REPO/contents/.claude-plugin/marketplace.json" \
             --method PUT \
             -f "message=release: $PLUGIN $TAG" \
             -f "content=$(base64 -w 0 < .claude-plugin/marketplace.json)" \
-            -f "sha=$FILE_SHA"
+            -f "sha=$FILE_SHA" \
+            -f "branch=$BRANCH"
+          gh api "repos/$GH_REPO/pulls" \
+            --method POST \
+            -f "title=release: $PLUGIN $TAG" \
+            -f "head=$BRANCH" \
+            -f "base=main"
