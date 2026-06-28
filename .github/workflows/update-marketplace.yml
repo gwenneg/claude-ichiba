@@ -13,39 +13,63 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Update marketplace.json
+      - id: update-marketplace
+        name: Update marketplace.json
         env:
-          PLUGIN: ${{ github.event.client_payload.plugin }}
-          SHA: ${{ github.event.client_payload.sha }}
-          TAG: ${{ github.event.client_payload.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE: ${{ github.event.client_payload.release }}
         run: |
+
+          # Resolve the plugin name by matching the release URL against source.repo in marketplace.json.
+          PLUGIN=$(jq -r --arg u "$RELEASE" \
+            '.plugins[] | select(("https://github.com/" + .source.repo + "/") as $prefix | $u | startswith($prefix)) | .name' \
+            .claude-plugin/marketplace.json)
+          [ -z "$PLUGIN" ] && echo "Error: no plugin matched $RELEASE" && exit 1
+
+          # Extract tag and repo from the release URL (https://github.com/owner/repo/releases/tag/vX.Y.Z).
+          TAG=$(basename "$RELEASE")
+          REPO=$(echo "$RELEASE" | cut -d'/' -f4-5)
+
+          # Resolve the commit SHA from the annotated tag — two calls needed to dereference the tag object.
+          REF=$(gh api "repos/$REPO/git/ref/tags/$TAG")
+          [ "$(echo "$REF" | jq -r '.object.type')" != "tag" ] && echo "Error: $TAG is not an annotated tag" && exit 1
+          SHA=$(gh api "repos/$REPO/git/tags/$(echo "$REF" | jq -r '.object.sha')" --jq '.object.sha')
+
+          # Update version, ref, and sha for the matched plugin. Uses a temp file because jq cannot read and write the same file.
           jq --arg p "$PLUGIN" --arg v "${TAG#v}" --arg r "$TAG" --arg s "$SHA" \
             '(.plugins[] | select(.name == $p)) |= (.version = $v | .source.ref = $r | .source.sha = $s)' \
             .claude-plugin/marketplace.json > /tmp/marketplace.json
           mv /tmp/marketplace.json .claude-plugin/marketplace.json
 
+          echo "plugin=$PLUGIN" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
       - name: Create branch and PR
         env:
-          GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PLUGIN: ${{ github.event.client_payload.plugin }}
-          TAG: ${{ github.event.client_payload.tag }}
+          PLUGIN: ${{ steps.update-marketplace.outputs.plugin }}
+          RELEASE: ${{ github.event.client_payload.release }}
+          TAG: ${{ steps.update-marketplace.outputs.tag }}
         run: |
           BRANCH="release/$PLUGIN-$TAG"
-          MAIN_SHA=$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq '.object.sha')
-          gh api "repos/$GH_REPO/git/refs" \
+
+          # Create the release branch from the current HEAD of main.
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" \
             --method POST \
             -f "ref=refs/heads/$BRANCH" \
-            -f "sha=$MAIN_SHA"
-          FILE_SHA=$(gh api "repos/$GH_REPO/contents/.claude-plugin/marketplace.json?ref=$BRANCH" --jq '.sha')
-          gh api "repos/$GH_REPO/contents/.claude-plugin/marketplace.json" \
+            -f "sha=$(git rev-parse HEAD)"
+
+          # Commit the updated marketplace.json via the Contents API, which produces a signed commit.
+          # The sha parameter is the current blob SHA of the file on the branch — required to detect conflicts.
+          gh api "repos/$GITHUB_REPOSITORY/contents/.claude-plugin/marketplace.json" \
             --method PUT \
             -f "message=release: $PLUGIN $TAG" \
             -f "content=$(base64 -w 0 < .claude-plugin/marketplace.json)" \
-            -f "sha=$FILE_SHA" \
+            -f "sha=$(git rev-parse HEAD:.claude-plugin/marketplace.json)" \
             -f "branch=$BRANCH"
-          gh api "repos/$GH_REPO/pulls" \
-            --method POST \
-            -f "title=release: $PLUGIN $TAG" \
-            -f "head=$BRANCH" \
-            -f "base=main"
+
+          gh pr create \
+            --title "release: $PLUGIN $TAG" \
+            --body "[$TAG]($RELEASE)" \
+            --base main \
+            --head "$BRANCH"
