@@ -17,12 +17,12 @@
         "developer-experience"
       ],
       "category": "productivity",
-      "version": "0.1.2",
+      "version": "0.2.7",
       "source": {
         "source": "github",
         "repo": "gwenneg/ai-mentor",
-        "ref": "v0.1.2",
-        "sha": "22f8a7e3f0ca1186fe1953c9a72b18ef2541596b"
+        "ref": "v0.2.7",
+        "sha": "fd256ff594586f45b083d38708a76428e46deef2"
       }
     },
     {
