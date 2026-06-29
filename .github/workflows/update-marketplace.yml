@@ -24,7 +24,10 @@ jobs:
           PLUGIN=$(jq -r --arg u "$RELEASE" \
             '.plugins[] | select(("https://github.com/" + .source.repo + "/") as $prefix | $u | startswith($prefix)) | .name' \
             .claude-plugin/marketplace.json)
-          [ -z "$PLUGIN" ] && echo "Error: no plugin matched $RELEASE" && exit 1
+          if [ -z "$PLUGIN" ]; then
+            echo "Error: no plugin matched $RELEASE"
+            exit 1
+          fi
 
           # Extract tag and repo from the release URL (https://github.com/owner/repo/releases/tag/vX.Y.Z).
           TAG=$(basename "$RELEASE")
@@ -32,7 +35,10 @@ jobs:
 
           # Resolve the commit SHA from the annotated tag — two calls needed to dereference the tag object.
           REF=$(gh api "repos/$REPO/git/ref/tags/$TAG")
-          [ "$(echo "$REF" | jq -r '.object.type')" != "tag" ] && echo "Error: $TAG is not an annotated tag" && exit 1
+          if [ "$(echo "$REF" | jq -r '.object.type')" != "tag" ]; then
+            echo "Error: $TAG is not an annotated tag"
+            exit 1
+          fi
           SHA=$(gh api "repos/$REPO/git/tags/$(echo "$REF" | jq -r '.object.sha')" --jq '.object.sha')
 
           # Update version, ref, and sha for the matched plugin. Uses a temp file because jq cannot read and write the same file.
