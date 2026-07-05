@@ -1,28 +1,47 @@
 # Reusable release workflow for plugins distributed through this marketplace.
 #
-# Plugin repos call it on annotated v* tags, pinned to a commit SHA of this
+# Plugin repos expose it behind a manual trigger, pinned to a commit SHA of this
 # repo (never @main — bump the pin deliberately, or let Dependabot do it):
 #
 #   name: Release
 #   on:
-#     push:
-#       tags: ['v*']
+#     workflow_dispatch:
+#       inputs:
+#         bump:
+#           description: >-
+#             Semver component to bump (patch, minor, or major), or auto to derive
+#             it from the conventional commits since the last tag
+#           type: choice
+#           options: [auto, patch, minor, major]
+#           default: auto
 #   jobs:
 #     release:
 #       uses: gwenneg/claude-ichiba/.github/workflows/plugin-release.yml@<sha> # <version/date>
+#       with:
+#         bump: ${{ inputs.bump }}
 #       permissions:
 #         contents: write
 #       secrets:
 #         ICHIBA_PAT: ${{ secrets.ICHIBA_PAT }}
 #
-# It validates that the pushed tag is annotated, creates the GitHub release
-# in the calling repo, and dispatches the release URL back here, where
-# update-marketplace.yml opens the marketplace PR.
+# What a release does, in order:
+#   1. Compute the next version: latest v* tag + bump.
+#   2. Commit it to plugin.json — via the Contents API, so the commit is signed.
+#   3. Tag that commit — a release tag always contains its own version.
+#   4. Publish the GitHub release.
+#   5. Dispatch back here; update-marketplace.yml opens the marketplace PR.
 
 name: Plugin release
 
 on:
   workflow_call:
+    inputs:
+      bump:
+        description: >-
+          Semver component to bump (patch, minor, or major), or auto to derive
+          it from the conventional commits since the last tag
+        type: string
+        required: true
     secrets:
       ICHIBA_PAT:
         description: Token allowed to send repository_dispatch to gwenneg/claude-ichiba
@@ -35,25 +54,87 @@ jobs:
       contents: write
     steps:
 
-      - id: tag
-        name: Validate and extract tag
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0 # full history so all v* tags are visible
+
+      - id: next-version
+        name: Compute next version from the previous tag
         env:
-          GH_TOKEN: ${{ github.token }}
+          BUMP: ${{ inputs.bump }}
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          # Only annotated tags are supported — lightweight tags provide no signing guarantee.
-          TYPE=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq '.object.type')
-          if [ "$TYPE" != "tag" ]; then
-            echo "Error: $TAG is not an annotated tag (type='$TYPE')"
+          PREVIOUS_TAG=$(git tag --list 'v*' | sort -V | tail -1)
+          COMMITS=$(git log --pretty=format:'%s' "${PREVIOUS_TAG:+$PREVIOUS_TAG..}HEAD")
+          if [ -z "$COMMITS" ]; then
+            echo "Error: no commits since ${PREVIOUS_TAG:-the beginning} — nothing to release"
             exit 1
           fi
-          echo "value=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Commits since ${PREVIOUS_TAG:-the beginning}:"
+          git log --pretty=format:'- %s' "${PREVIOUS_TAG:+$PREVIOUS_TAG..}HEAD"
+
+          if [ "$BUMP" = "auto" ]; then
+            # Conventional commits decide the bump: a '!' breaking marker
+            # anywhere before the colon → major, any feat: → minor, else patch.
+            BUMP="patch"
+            while IFS= read -r msg; do
+              case "$msg" in
+                *'!'*:*) BUMP="major"; break ;;
+                feat:*) BUMP="minor" ;;
+              esac
+            done <<< "$COMMITS"
+            echo "Auto-derived bump: $BUMP"
+          fi
+
+          PREVIOUS_VERSION="${PREVIOUS_TAG#v}"
+          PREVIOUS_VERSION="${PREVIOUS_VERSION:-0.0.0}"
+          IFS=. read -r MAJOR MINOR PATCH <<< "$PREVIOUS_VERSION"
+          case "$BUMP" in
+            major) NEXT_VERSION="$((MAJOR + 1)).0.0" ;;
+            minor) NEXT_VERSION="$MAJOR.$((MINOR + 1)).0" ;;
+            patch) NEXT_VERSION="$MAJOR.$MINOR.$((PATCH + 1))" ;;
+            *) echo "Error: unknown bump '$BUMP'"; exit 1 ;;
+          esac
+          echo "version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
+
+      - id: update-plugin-json
+        name: Commit version bump to plugin.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.next-version.outputs.version }}
+        run: |
+          MANIFEST=.claude-plugin/plugin.json
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          CONTENT=$(jq --arg v "$VERSION" '.version = $v' "$MANIFEST" | base64 -w 0)
+          # Commit via the Contents API — GitHub signs it automatically. The
+          # file blob SHA guards against a concurrent edit of the manifest.
+          COMMIT=$(gh api "repos/$GITHUB_REPOSITORY/contents/$MANIFEST" \
+            --method PUT \
+            -f "message=release: v$VERSION" \
+            -f "content=$CONTENT" \
+            -f "sha=$(git rev-parse "HEAD:$MANIFEST")" \
+            -f "branch=$BRANCH" \
+            --jq '.commit.sha')
+          echo "commit=$COMMIT" >> "$GITHUB_OUTPUT"
+
+      - name: Create annotated tag on the bump commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ steps.next-version.outputs.version }}
+          COMMIT: ${{ steps.update-plugin-json.outputs.commit }}
+        run: |
+          # Annotated (not lightweight) — update-marketplace.yml dereferences the tag object.
+          TAG_OBJ=$(gh api "repos/$GITHUB_REPOSITORY/git/tags" \
+            --method POST \
+            -f "tag=$TAG" -f "message=$TAG" -f "object=$COMMIT" -f "type=commit" \
+            --jq '.sha')
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" \
+            --method POST -f "ref=refs/tags/$TAG" -f "sha=$TAG_OBJ"
 
       - id: create-release
         name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.tag.outputs.value }}
+          TAG: v${{ steps.next-version.outputs.version }}
         run: |
           URL=$(gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes)
           echo "url=$URL" >> "$GITHUB_OUTPUT"

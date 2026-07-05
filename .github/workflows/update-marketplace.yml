@@ -41,9 +41,10 @@ jobs:
           fi
           SHA=$(gh api "repos/$REPO/git/tags/$(echo "$REF" | jq -r '.object.sha')" --jq '.object.sha')
 
-          # Update version, ref, and sha for the matched plugin. Uses a temp file because jq cannot read and write the same file.
-          jq --arg p "$PLUGIN" --arg v "${TAG#v}" --arg r "$TAG" --arg s "$SHA" \
-            '(.plugins[] | select(.name == $p)) |= (.version = $v | .source.ref = $r | .source.sha = $s)' \
+          # Update ref and sha for the matched plugin; the version lives in the plugin's own
+          # plugin.json. Uses a temp file because jq cannot read and write the same file.
+          jq --arg p "$PLUGIN" --arg r "$TAG" --arg s "$SHA" \
+            '(.plugins[] | select(.name == $p)) |= (del(.version) | .source.ref = $r | .source.sha = $s)' \
             .claude-plugin/marketplace.json > /tmp/marketplace.json
           mv /tmp/marketplace.json .claude-plugin/marketplace.json
 
