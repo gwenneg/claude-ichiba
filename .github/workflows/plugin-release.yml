@@ -26,7 +26,9 @@
 #
 # What a release does, in order:
 #   1. Compute the next version: latest v* tag + bump.
-#   2. Commit it to plugin.json — via the Contents API, so the commit is signed.
+#   2. Commit it to plugin.json — a Contents-API commit on a release branch,
+#      squash-merged right away; both commits are GitHub-signed, satisfying
+#      default branches that require signed commits and changes through PRs.
 #   3. Tag that commit — a release tag always contains its own version.
 #   4. Publish the GitHub release.
 #   5. Dispatch back here; update-marketplace.yml opens the marketplace PR.
@@ -97,23 +99,49 @@ jobs:
           echo "version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
 
       - id: update-plugin-json
-        name: Commit version bump to plugin.json
+        name: Commit version bump to plugin.json through a release PR
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.next-version.outputs.version }}
         run: |
           MANIFEST=.claude-plugin/plugin.json
-          BRANCH="${GITHUB_REF#refs/heads/}"
+          BASE="${GITHUB_REF#refs/heads/}"
+          BRANCH="release/v$VERSION"
           CONTENT=$(jq --arg v "$VERSION" '.version = $v' "$MANIFEST" | base64 -w 0)
-          # Commit via the Contents API — GitHub signs it automatically. The
-          # file blob SHA guards against a concurrent edit of the manifest.
-          COMMIT=$(gh api "repos/$GITHUB_REPOSITORY/contents/$MANIFEST" \
+
+          # The base branch only accepts signed commits arriving through pull
+          # requests, so stage the bump on a release branch and squash-merge it
+          # immediately — the Contents-API commit and the squash commit are
+          # both GitHub-signed. Create the branch, or force-move it if a
+          # previous failed run left it behind.
+          if gh api "repos/$GITHUB_REPOSITORY/git/refs/heads/$BRANCH" --silent 2>/dev/null; then
+            gh api "repos/$GITHUB_REPOSITORY/git/refs/heads/$BRANCH" \
+              --method PATCH -f "sha=$(git rev-parse HEAD)" -F "force=true"
+          else
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" \
+              --method POST -f "ref=refs/heads/$BRANCH" -f "sha=$(git rev-parse HEAD)"
+          fi
+
+          # The file blob SHA guards against a concurrent edit of the manifest.
+          gh api "repos/$GITHUB_REPOSITORY/contents/$MANIFEST" \
             --method PUT \
             -f "message=release: v$VERSION" \
             -f "content=$CONTENT" \
             -f "sha=$(git rev-parse "HEAD:$MANIFEST")" \
-            -f "branch=$BRANCH" \
-            --jq '.commit.sha')
+            -f "branch=$BRANCH" > /dev/null
+
+          PR=$(gh api "repos/$GITHUB_REPOSITORY/pulls" \
+            --method POST \
+            -f "title=release: v$VERSION" \
+            -f "body=Automated version bump for the v$VERSION release." \
+            -f "head=$BRANCH" -f "base=$BASE" \
+            --jq '.number')
+          COMMIT=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/merge" \
+            --method PUT \
+            -f "merge_method=squash" \
+            -f "commit_title=release: v$VERSION" \
+            --jq '.sha')
+          gh api "repos/$GITHUB_REPOSITORY/git/refs/heads/$BRANCH" --method DELETE
           echo "commit=$COMMIT" >> "$GITHUB_OUTPUT"
 
       - name: Create annotated tag on the bump commit
