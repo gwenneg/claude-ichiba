@@ -21,8 +21,13 @@
 #         bump: ${{ inputs.bump }}
 #       permissions:
 #         contents: write
+#         pull-requests: write
 #       secrets:
 #         ICHIBA_PAT: ${{ secrets.ICHIBA_PAT }}
+#
+# The repo must also allow Actions to create pull requests (Settings →
+# Actions → General → "Allow GitHub Actions to create and approve pull
+# requests") — the release PR is opened with the workflow's own token.
 #
 # What a release does, in order:
 #   1. Compute the next version: latest v* tag + bump.
@@ -54,6 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write # the version bump lands through an auto-merged PR
     steps:
 
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
