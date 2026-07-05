@@ -51,9 +51,8 @@ jobs:
         run: |
           PREVIOUS_TAG=$(git tag --list 'v*' | sort -V | tail -1)
 
-          # Belt and braces for merge methods that bypass the job guard: if
-          # the manifest already names an untagged version, a release merge
-          # is in flight and its tag is not cut yet — leave everything alone.
+          # An untagged manifest version means a release merge is in flight
+          # (belt and braces — the job guard misses non-squash merges).
           MANIFEST_VERSION=$(jq -r '.version // empty' .claude-plugin/plugin.json)
           if [ -n "$MANIFEST_VERSION" ] && [ "v$MANIFEST_VERSION" != "$PREVIOUS_TAG" ]; then
             echo "Release v$MANIFEST_VERSION is in flight — skipping"
