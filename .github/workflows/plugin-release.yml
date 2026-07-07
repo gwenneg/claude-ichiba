@@ -115,15 +115,14 @@ jobs:
             exit 0
           fi
 
-          # Conventional commits decide the bump: a '!' breaking marker
-          # anywhere before the colon → major, any feat: → minor, else patch.
+          # Conventional commits decide the bump: a '!' breaking marker on the
+          # type (scoped or not) → major, any feat → minor, else patch.
           BUMP="patch"
-          while IFS= read -r msg; do
-            case "$msg" in
-              *'!'*:*) BUMP="major"; break ;;
-              feat:*) BUMP="minor" ;;
-            esac
-          done <<< "$COMMITS"
+          if grep -qE '^[a-z]+(\([^)]*\))?!: ' <<< "$COMMITS"; then
+            BUMP="major"
+          elif grep -qE '^feat(\([^)]*\))?: ' <<< "$COMMITS"; then
+            BUMP="minor"
+          fi
 
           PREVIOUS_VERSION="${PREVIOUS_TAG#v}"
           PREVIOUS_VERSION="${PREVIOUS_VERSION:-0.0.0}"
