@@ -20,8 +20,8 @@
       "source": {
         "source": "github",
         "repo": "gwenneg/ai-mentor",
-        "ref": "v0.9.0",
-        "sha": "7271fda46e8a55319a193ff1284f0128b48a97ce"
+        "ref": "v0.9.1",
+        "sha": "cde4c85b496def0d047a57c2d8b10dd96ae5cd8b"
       }
     },
     {
