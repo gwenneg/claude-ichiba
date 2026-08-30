@@ -36,12 +36,11 @@
         "deployment"
       ],
       "category": "devops",
-      "version": "0.0.0",
       "source": {
         "source": "github",
         "repo": "gwenneg/soundings",
-        "ref": "v0.0.0",
-        "sha": ""
+        "ref": "v0.4.0",
+        "sha": "3acbefed792732f891b88d50a7a0f053bfa18be0"
       }
     },
     {
