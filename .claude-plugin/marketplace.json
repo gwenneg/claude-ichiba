@@ -26,7 +26,7 @@
     },
     {
       "name": "soundings",
-      "description": "Take soundings before you ship. Analyzes GitHub/GitLab compare URLs and produces a 0-100 release confidence score with an actionable risk report: categorized concerns, compound-risk detection across repositories, and actionable checks. No external LLM API, no service-account keys - the agent does the analysis, a small Go helper does the fetching.",
+      "description": "Take soundings before you ship. Point it at one or more GitHub/GitLab compare URLs and get a clear release verdict - release, manual review, or no-go - computed from the severities of the risks found and citing each risk that drove it, plus a report specific enough to act on: named files and functions, concrete pre-release checks, and compound-risk detection across repositories in multi-service deployments. No external LLM API, no service-account key, no Docker image - the Claude agent already in your session does the analysis in an isolated read-only stage hardened against prompt injection, a small Go helper does the fetching, and a normal run needs no permission prompts.",
       "homepage": "https://github.com/gwenneg/soundings",
       "keywords": [
         "release-management",
@@ -45,7 +45,7 @@
     },
     {
       "name": "soundings-app-interface",
-      "description": "Release confidence analysis for Red Hat app-interface merge requests, built on soundings.",
+      "description": "Take soundings before you ship an app-interface deployment. Point it at a Red Hat app-interface MR and it resolves the compare URLs from the newest devtools-bot Diffs comment, runs one soundings analysis across all of them together - one clear release verdict, with compound risks across repositories caught - annotates the report with app-interface's override-justification and feedback conventions, and offers to post it back to the MR as a new comment under your own identity. Red Hat internal: requires the soundings plugin (0.6.0 or later), a GITLAB_TOKEN for the app-interface GitLab host, and VPN access.",
       "homepage": "https://github.com/gwenneg/soundings-app-interface",
       "keywords": [
         "release-management",
