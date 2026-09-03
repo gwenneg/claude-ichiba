@@ -58,8 +58,8 @@
       "source": {
         "source": "github",
         "repo": "gwenneg/soundings-app-interface",
-        "ref": "v0.9.0",
-        "sha": "d3336cecc39b296b6d20a612b8bc8f30adf63296"
+        "ref": "v0.9.1",
+        "sha": "246ab5efc61de923835835a496f71e85dcf3414d"
       }
     },
     {
