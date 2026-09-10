@@ -25,6 +25,26 @@
       }
     },
     {
+      "name": "mintmaker-automerge",
+      "description": "Turns on Renovate automerge for low-risk dependency updates in a Konflux-onboarded repository, one decision at a time: vetted patch and minor bumps per ecosystem, an allow-list of SHA-pinned GitHub Actions, manual-review carve-outs for the packages you name, and the GitHub branch-protection changes (required status checks, a bypass scoped to the Konflux app) that make automerge safe, set before the config PR opens. Inherits MintMaker's release-age delay rather than restating it, never changes a GitHub setting through the API, and writes one commented config file that reads on its own.",
+      "homepage": "https://github.com/gwenneg/mintmaker-automerge",
+      "keywords": [
+        "renovate",
+        "mintmaker",
+        "konflux",
+        "automerge",
+        "devops"
+      ],
+      "category": "devops",
+      "version": "0.0.0",
+      "source": {
+        "source": "github",
+        "repo": "gwenneg/mintmaker-automerge",
+        "ref": "v0.0.0",
+        "sha": ""
+      }
+    },
+    {
       "name": "soundings",
       "description": "Take soundings before you ship. Point it at one or more GitHub/GitLab compare URLs and get a clear release verdict - release, manual review, or no-go - computed from the severities of the risks found and citing each risk that drove it, plus a report specific enough to act on: named files and functions, concrete pre-release checks, and compound-risk detection across repositories in multi-service deployments. No external LLM API, no service-account key, no Docker image - the Claude agent already in your session does the analysis in an isolated read-only stage hardened against prompt injection, a small Go helper does the fetching, and a normal run needs no permission prompts.",
       "homepage": "https://github.com/gwenneg/soundings",
