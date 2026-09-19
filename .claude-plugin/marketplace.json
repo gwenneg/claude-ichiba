@@ -58,8 +58,8 @@
       "source": {
         "source": "github",
         "repo": "gwenneg/soundings",
-        "ref": "v0.11.0",
-        "sha": "a6156a36e69f368ee271edb936c5dae56be34bce"
+        "ref": "v0.11.1",
+        "sha": "6aa42d51777d026af74d7a6a4637e6c2f82f1624"
       }
     },
     {
