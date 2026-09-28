@@ -39,8 +39,8 @@
       "source": {
         "source": "github",
         "repo": "gwenneg/mintmaker-automerge",
-        "ref": "v0.11.1",
-        "sha": "a86b67fad6e4c3de265b7cfd9e5b07d2431984d0"
+        "ref": "v0.12.0",
+        "sha": "e19cb0cfa6209b72e60103344266e777e20bd685"
       }
     },
     {
